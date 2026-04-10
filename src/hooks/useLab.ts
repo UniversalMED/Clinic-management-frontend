@@ -37,7 +37,7 @@ export function useLabOrders(params?: {
   patient_id?: string
   status?: string
   unbilled?: string | boolean
-  billable?: string | boolean
+  pending_payment?: string | boolean
 }) {
   return useQuery({
     queryKey: queryKeys.labOrders.list(params ?? {}),

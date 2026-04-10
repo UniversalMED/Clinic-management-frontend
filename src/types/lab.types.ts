@@ -1,4 +1,5 @@
 export type TestOrderStatus =
+  | 'awaiting_payment'
   | 'pending'
   | 'in_progress'
   | 'completed'

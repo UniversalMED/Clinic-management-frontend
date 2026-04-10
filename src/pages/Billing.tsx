@@ -5,8 +5,10 @@ import { Receipt } from 'lucide-react'
 import { toast } from 'sonner'
 
 import type { Invoice } from '@/types/billing.types'
+import type { TestOrder } from '@/types/lab.types'
 import { useAuth } from '@/hooks/useAuth'
 import { useInvoices, useCreateInvoice } from '@/hooks/useBilling'
+import { useLabOrders } from '@/hooks/useLab'
 import { usePatients } from '@/hooks/usePatients'
 import { useVisits } from '@/hooks/useVisits'
 import { formatDate, formatCurrency } from '@/utils/formatters'
@@ -29,9 +31,10 @@ import { cn } from '@/lib/utils'
 // Filter tabs
 // ---------------------------------------------------------------------------
 
-type StatusFilter = 'all' | 'draft' | 'finalized' | 'void'
+type StatusFilter = 'pending_billing' | 'all' | 'draft' | 'finalized' | 'void'
 
 const FILTER_TABS: { id: StatusFilter; label: string }[] = [
+  { id: 'pending_billing', label: 'Pending Billing' },
   { id: 'all', label: 'All' },
   { id: 'draft', label: 'Draft' },
   { id: 'finalized', label: 'Finalized' },
@@ -107,6 +110,113 @@ function buildColumns(onRowClick: (id: string) => void): ColumnDef<Invoice>[] {
       ),
     },
   ]
+}
+
+// ---------------------------------------------------------------------------
+// Pending Billing Section
+// ---------------------------------------------------------------------------
+
+function PendingBillingSection() {
+  const navigate = useNavigate()
+  const createInvoice = useCreateInvoice()
+
+  const { data, isLoading } = useLabOrders({
+    status: 'awaiting_payment',
+    page_size: 100,
+  })
+
+  const orders = data?.results ?? []
+
+  // Group orders by visit_id
+  const byVisit = orders.reduce<Record<string, TestOrder[]>>((acc, order) => {
+    if (!acc[order.visit_id]) acc[order.visit_id] = []
+    acc[order.visit_id].push(order)
+    return acc
+  }, {})
+
+  function handleCreateInvoice(visitId: string) {
+    createInvoice.mutate(
+      { visit_id: visitId },
+      {
+        onSuccess: (invoice) => {
+          toast.success('Invoice created')
+          navigate(`/billing/invoices/${invoice.id}`)
+        },
+        onError: () => toast.error('Failed to create invoice'),
+      },
+    )
+  }
+
+  if (isLoading) {
+    return (
+      <div className="space-y-3">
+        {[1, 2, 3].map((i) => (
+          <div key={i} className="h-20 rounded-lg border border-border animate-pulse bg-muted/30" />
+        ))}
+      </div>
+    )
+  }
+
+  if (orders.length === 0) {
+    return (
+      <p className="py-10 text-center text-sm text-muted-foreground">
+        No lab orders awaiting payment.
+      </p>
+    )
+  }
+
+  return (
+    <div className="space-y-3">
+      {Object.entries(byVisit).map(([visitId, visitOrders]) => {
+        const total = visitOrders.reduce(
+          (sum, o) => sum + parseFloat(o.price_at_order_time || '0'),
+          0,
+        )
+        return (
+          <div
+            key={visitId}
+            className="flex items-start justify-between gap-4 rounded-lg border border-border p-4"
+          >
+            <div className="space-y-1.5 min-w-0">
+              <div className="flex items-center gap-2">
+                <span className="text-xs text-muted-foreground font-mono">
+                  Visit …{visitId.slice(-6)}
+                </span>
+                <Link
+                  to={`/visits/${visitId}`}
+                  className="text-xs text-primary hover:underline"
+                >
+                  View visit ↗
+                </Link>
+              </div>
+              <div className="space-y-0.5">
+                {visitOrders.map((o) => (
+                  <div key={o.id} className="flex items-center gap-3 text-sm">
+                    <span className="font-medium">
+                      {o.test_name ?? `Test …${o.test_id.slice(-6)}`}
+                    </span>
+                    <span className="text-muted-foreground">
+                      {formatCurrency(o.price_at_order_time)}
+                    </span>
+                  </div>
+                ))}
+              </div>
+              <p className="text-sm font-semibold">
+                Total: {formatCurrency(String(total.toFixed(2)))}
+              </p>
+            </div>
+            <Button
+              size="sm"
+              onClick={() => handleCreateInvoice(visitId)}
+              disabled={createInvoice.isPending}
+            >
+              Create Invoice
+            </Button>
+          </div>
+        )
+      })}
+    </div>
+  )
 }
 
 // ---------------------------------------------------------------------------
@@ -291,15 +401,21 @@ export default function Billing() {
   const navigate = useNavigate()
   const { hasPermission } = useAuth()
 
-  const [statusFilter, setStatusFilter] = useState<StatusFilter>('all')
+  const [statusFilter, setStatusFilter] = useState<StatusFilter>('pending_billing')
   const [page, setPage] = useState(1)
   const [dialogOpen, setDialogOpen] = useState(false)
 
-  const { data, isLoading } = useInvoices({
-    status: statusFilter === 'all' ? undefined : statusFilter,
-    page,
-    page_size: PAGE_SIZE,
-  })
+  const isPendingTab = statusFilter === 'pending_billing'
+
+  const { data, isLoading } = useInvoices(
+    !isPendingTab
+      ? {
+          status: statusFilter === 'all' ? undefined : statusFilter,
+          page,
+          page_size: PAGE_SIZE,
+        }
+      : undefined,
+  )
 
   const columns = buildColumns((id) => navigate(`/billing/invoices/${id}`))
   const tableData = data ?? { count: 0, next: null, previous: null, results: [] }
@@ -344,19 +460,23 @@ export default function Billing() {
         )}
       </div>
 
-      <DataTable
-        data={tableData}
-        columns={columns}
-        isLoading={isLoading}
-        page={page}
-        onPageChange={setPage}
-        pageSize={PAGE_SIZE}
-        emptyMessage={
-          statusFilter === 'all'
-            ? 'No invoices yet.'
-            : `No ${statusFilter} invoices.`
-        }
-      />
+      {isPendingTab ? (
+        <PendingBillingSection />
+      ) : (
+        <DataTable
+          data={tableData}
+          columns={columns}
+          isLoading={isLoading}
+          page={page}
+          onPageChange={setPage}
+          pageSize={PAGE_SIZE}
+          emptyMessage={
+            statusFilter === 'all'
+              ? 'No invoices yet.'
+              : `No ${statusFilter} invoices.`
+          }
+        />
+      )}
 
       <NewInvoiceDialog open={dialogOpen} onOpenChange={setDialogOpen} />
     </div>

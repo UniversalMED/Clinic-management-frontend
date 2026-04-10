@@ -51,7 +51,7 @@ export const listOrders = (params?: {
   patient_id?: string
   status?: string
   unbilled?: string | boolean
-  billable?: string | boolean
+  pending_payment?: string | boolean
 }) =>
   client
     .get<PaginatedResponse<TestOrder>>('/api/lab/orders/', { params })

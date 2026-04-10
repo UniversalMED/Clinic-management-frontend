@@ -257,7 +257,7 @@ function AddLineItemForm({
 
   const { data: labOrdersData, isLoading: ordersLoading } = useLabOrders({
     visit_id: visitId,
-    billable: 'true',
+    pending_payment: 'true',
     page_size: 100,
   })
 
