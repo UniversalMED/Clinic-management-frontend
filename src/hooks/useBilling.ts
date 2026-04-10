@@ -26,10 +26,11 @@ export function useInvoices(params?: {
   patient_id?: string
   status?: string
   finalized_at_date?: string
-}) {
+} | undefined) {
   return useQuery({
     queryKey: queryKeys.invoices.list(params ?? {}),
     queryFn: () => listInvoices(params),
+    enabled: params !== undefined,
   })
 }
 

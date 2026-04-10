@@ -1,5 +1,5 @@
 import type { PaginatedResponse } from '@/types/api.types'
-import type { Consultation, Visit } from '@/types/patient.types'
+import type { Consultation, Prescription, Visit } from '@/types/patient.types'
 
 import client from './client'
 
@@ -51,3 +51,27 @@ export const createConsultation = (data: CreateConsultationPayload) =>
   client
     .post<Consultation>('/api/clinic/consultations/', data)
     .then((r) => r.data)
+
+export type CreatePrescriptionPayload = {
+  consultation_id: string
+  notes?: string
+  items: {
+    medication: string
+    dosage: string
+    frequency: string
+    duration?: string
+    instructions?: string
+  }[]
+}
+
+export const listPrescriptions = (params?: {
+  consultation_id?: string
+  page?: number
+  page_size?: number
+}) =>
+  client
+    .get<PaginatedResponse<Prescription>>('/api/clinic/prescriptions/', { params })
+    .then((r) => r.data)
+
+export const createPrescription = (data: CreatePrescriptionPayload) =>
+  client.post<Prescription>('/api/clinic/prescriptions/', data).then((r) => r.data)

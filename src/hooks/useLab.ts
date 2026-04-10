@@ -3,14 +3,19 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import {
   createOrder,
   createResult,
+  createTest,
   getOrder,
   getResult,
   listOrders,
+  listResults,
   listTests,
   updateOrder,
+  updateTest,
   type CreateLabOrderPayload,
   type CreateLabResultPayload,
+  type CreateLabTestPayload,
   type UpdateLabOrderPayload,
+  type UpdateLabTestPayload,
 } from '@/api/lab'
 import { queryKeys } from '@/utils/queryKeys'
 
@@ -88,10 +93,48 @@ export function useCreateLabResult() {
   })
 }
 
+export function useLabResults(params?: {
+  order_id?: string
+  page?: number
+  page_size?: number
+}) {
+  return useQuery({
+    queryKey: queryKeys.labResults.list(params ?? {}),
+    queryFn: () => listResults(params),
+    enabled: Boolean(params?.order_id),
+  })
+}
+
 export function useLabResult(id: string | undefined) {
   return useQuery({
     queryKey: queryKeys.labResults.detail(id ?? ''),
     queryFn: () => getResult(id!),
     enabled: Boolean(id),
+  })
+}
+
+export function useCreateLabTest() {
+  const queryClient = useQueryClient()
+  return useMutation({
+    mutationFn: (data: CreateLabTestPayload) => createTest(data),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: queryKeys.labTests.all })
+    },
+  })
+}
+
+export function useUpdateLabTest() {
+  const queryClient = useQueryClient()
+  return useMutation({
+    mutationFn: ({
+      id,
+      data,
+    }: {
+      id: string
+      data: UpdateLabTestPayload
+    }) => updateTest(id, data),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: queryKeys.labTests.all })
+    },
   })
 }

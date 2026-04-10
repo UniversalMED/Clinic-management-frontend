@@ -6,7 +6,11 @@ import { getMe } from '@/api/users'
 import { supabase } from '@/lib/supabase'
 import { useAuthStore } from '@/store/auth.store'
 import type { Permission, Profile, Role } from '@/types/user.types'
-import { hasPermission as roleHasPermission } from '@/utils/permissions'
+import {
+  hasPermission as roleHasPermission,
+  hasAllPermissions as roleHasAllPermissions,
+  hasAnyPermission as roleHasAnyPermission,
+} from '@/utils/permissions'
 import { queryKeys } from '@/utils/queryKeys'
 
 export function useAuth(): {
@@ -15,6 +19,8 @@ export function useAuth(): {
   isLoading: boolean
   isAuthenticated: boolean
   hasPermission: (p: Permission) => boolean
+  hasAllPermissions: (ps: Permission[]) => boolean
+  hasAnyPermission: (ps: Permission[]) => boolean
   login: (email: string, password: string) => Promise<void>
   logout: () => Promise<void>
 } {
@@ -27,6 +33,9 @@ export function useAuth(): {
   const setLoading = useAuthStore((s) => s.setLoading)
 
   useEffect(() => {
+    // Already hydrated — don't re-run on every component mount.
+    if (useAuthStore.getState().isAuthenticated) return
+
     let cancelled = false
 
     async function hydrate() {
@@ -44,7 +53,10 @@ export function useAuth(): {
           return
         }
 
-        const profile = await getMe()
+        const timeout = new Promise<never>((_, reject) =>
+          setTimeout(() => reject(new Error('Profile fetch timed out')), 10_000),
+        )
+        const profile = await Promise.race([getMe(), timeout])
         if (!cancelled) {
           setUser(profile)
           queryClient.setQueryData(queryKeys.users.me(), profile)
@@ -73,6 +85,22 @@ export function useAuth(): {
     [user?.role],
   )
 
+  const hasAllPermissions = useCallback(
+    (ps: Permission[]) => {
+      const r = user?.role
+      return r ? roleHasAllPermissions(r, ps) : false
+    },
+    [user?.role],
+  )
+
+  const hasAnyPermission = useCallback(
+    (ps: Permission[]) => {
+      const r = user?.role
+      return r ? roleHasAnyPermission(r, ps) : false
+    },
+    [user?.role],
+  )
+
   const login = useCallback(
     async (email: string, password: string) => {
       setLoading(true)
@@ -80,11 +108,22 @@ export function useAuth(): {
         const { error } = await signInWithPassword(email, password)
         if (error) {
           setLoading(false)
-          throw error
+          throw new Error(error.message ?? 'Invalid email or password.')
         }
-        const profile = await getMe()
-        setUser(profile)
-        queryClient.setQueryData(queryKeys.users.me(), profile)
+        try {
+          const profile = await getMe()
+          setUser(profile)
+          queryClient.setQueryData(queryKeys.users.me(), profile)
+        } catch {
+          // Supabase auth succeeded but the backend rejected the token.
+          // Most likely cause: custom_access_token_hook is not enabled in
+          // Supabase → the JWT is missing user_role / clinic_id claims.
+          await signOut()
+          throw new Error(
+            'Login succeeded but the server rejected your session. ' +
+            'Ensure the custom_access_token_hook is enabled in Supabase.',
+          )
+        }
       } finally {
         setLoading(false)
       }
@@ -105,6 +144,8 @@ export function useAuth(): {
     isLoading,
     isAuthenticated,
     hasPermission,
+    hasAllPermissions,
+    hasAnyPermission,
     login,
     logout,
   }

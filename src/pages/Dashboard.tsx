@@ -1,4 +1,4 @@
-import { useMemo } from 'react'
+import { useMemo, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { format, differenceInYears, parseISO } from 'date-fns'
 import {
@@ -8,6 +8,7 @@ import {
   Banknote,
   ChevronRight,
   Inbox,
+  CalendarDays,
 } from 'lucide-react'
 
 import { useVisits } from '@/hooks/useVisits'
@@ -16,6 +17,7 @@ import { useLabOrders } from '@/hooks/useLab'
 import { useInvoices } from '@/hooks/useBilling'
 import { usePatients } from '@/hooks/usePatients'
 import { useUsers } from '@/hooks/useUsers'
+import { useAuth } from '@/hooks/useAuth'
 import { formatCurrency, formatRelative } from '@/utils/formatters'
 import { StatusBadge } from '@/components/ui/StatusBadge'
 import { Badge } from '@/components/ui/badge'
@@ -36,7 +38,9 @@ import { cn } from '@/lib/utils'
 // Helpers
 // ---------------------------------------------------------------------------
 
-const today = format(new Date(), 'yyyy-MM-dd')
+function todayStr(): string {
+  return format(new Date(), 'yyyy-MM-dd')
+}
 
 function getInitials(name: string): string {
   return name
@@ -123,9 +127,15 @@ function EmptyState({ message }: { message: string }) {
 // ---------------------------------------------------------------------------
 
 export default function Dashboard() {
+  const { hasPermission } = useAuth()
+  const canViewBilling = hasPermission('view_billing')
+
+  const [selectedDate, setSelectedDate] = useState(todayStr)
+  const isToday = selectedDate === todayStr()
+
   // --- Stat card queries (page_size=1 → only need count) ---
   const { data: visitsData, isLoading: visitsLoading } = useVisits({
-    date: today,
+    date: selectedDate,
     page_size: 1,
   })
 
@@ -139,11 +149,12 @@ export default function Dashboard() {
     page_size: 1,
   })
 
-  const { data: invoicesData, isLoading: invoicesLoading } = useInvoices({
-    status: 'finalized',
-    finalized_at_date: today,
-    page_size: 100,
-  })
+  // Only fetch billing data for roles that are allowed to see it
+  const { data: invoicesData, isLoading: invoicesLoading } = useInvoices(
+    canViewBilling
+      ? { status: 'finalized', finalized_at_date: selectedDate, page_size: 100 }
+      : undefined,
+  )
 
   const revenueToday = useMemo(
     () =>
@@ -176,11 +187,34 @@ export default function Dashboard() {
   return (
     <div className="space-y-6">
       {/* ------------------------------------------------------------------ */}
+      {/* Date picker                                                          */}
+      {/* ------------------------------------------------------------------ */}
+      <div className="flex items-center gap-2">
+        <CalendarDays className="h-4 w-4 text-muted-foreground" />
+        <input
+          type="date"
+          value={selectedDate}
+          onChange={(e) => setSelectedDate(e.target.value)}
+          className="h-8 rounded-lg border border-input bg-transparent px-2.5 py-1 text-sm outline-none transition-colors focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50 dark:bg-input/30"
+          aria-label="Select date"
+        />
+        {!isToday && (
+          <button
+            type="button"
+            onClick={() => setSelectedDate(todayStr())}
+            className="text-xs text-muted-foreground hover:text-foreground"
+          >
+            Today
+          </button>
+        )}
+      </div>
+
+      {/* ------------------------------------------------------------------ */}
       {/* Stat cards                                                           */}
       {/* ------------------------------------------------------------------ */}
       <div className="grid grid-cols-2 gap-4 sm:grid-cols-4">
         <StatCard
-          title="Patients today"
+          title={isToday ? 'Patients today' : `Patients ${selectedDate}`}
           value={visitsData?.count ?? 0}
           icon={
             <Users className="h-4 w-4 text-blue-600 dark:text-blue-400" />
@@ -206,15 +240,17 @@ export default function Dashboard() {
           iconBg="bg-purple-100 dark:bg-purple-950/50"
           loading={labLoading}
         />
-        <StatCard
-          title="Revenue today"
-          value={formatCurrency(revenueToday)}
-          icon={
-            <Banknote className="h-4 w-4 text-emerald-600 dark:text-emerald-400" />
-          }
-          iconBg="bg-emerald-100 dark:bg-emerald-950/50"
-          loading={invoicesLoading}
-        />
+        {canViewBilling && (
+          <StatCard
+            title={isToday ? 'Revenue today' : `Revenue ${selectedDate}`}
+            value={formatCurrency(revenueToday)}
+            icon={
+              <Banknote className="h-4 w-4 text-emerald-600 dark:text-emerald-400" />
+            }
+            iconBg="bg-emerald-100 dark:bg-emerald-950/50"
+            loading={invoicesLoading}
+          />
+        )}
       </div>
 
       {/* ------------------------------------------------------------------ */}
@@ -323,7 +359,7 @@ export default function Dashboard() {
             ) : (
               <ul className="divide-y">
                 {patientsData.results.map((patient) => {
-                  const isNew = patient.created_at.startsWith(today)
+                  const isNew = patient.created_at.startsWith(selectedDate)
                   return (
                     <li
                       key={patient.id}
@@ -342,11 +378,11 @@ export default function Dashboard() {
                           {patient.full_name}
                         </p>
                         <p className="text-xs text-muted-foreground">
-                          {patient.gender === 'M'
+                          {patient.gender === 'male'
                             ? 'Male'
-                            : patient.gender === 'F'
+                            : patient.gender === 'female'
                               ? 'Female'
-                              : 'Other'}
+                              : '—'}
                           {' · '}
                           {getAge(patient.date_of_birth)} yrs
                         </p>

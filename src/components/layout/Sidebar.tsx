@@ -1,24 +1,25 @@
 import type { ReactElement } from 'react'
-import {
-  Building2,
-  ClipboardList,
-  CreditCard,
-  LayoutGrid,
-  Microscope,
-  ScrollText,
-  UserCog,
-  Users,
-  UsersRound,
-} from 'lucide-react'
 import { NavLink } from 'react-router-dom'
+import { Building2, LogOut } from 'lucide-react'
 
+import {
+  NAV_ITEMS,
+  NAV_SECTIONS,
+  SECTION_LABELS,
+  type NavSection,
+} from '@/router/navConfig'
 import { Avatar, AvatarFallback } from '@/components/ui/avatar'
 import { Badge } from '@/components/ui/badge'
+import { Button } from '@/components/ui/button'
 import { useAuth } from '@/hooks/useAuth'
 import { useLabOrders } from '@/hooks/useLab'
 import { useQueue } from '@/hooks/useQueue'
 import { cn } from '@/lib/utils'
 import { useAuthStore } from '@/store/auth.store'
+
+// ---------------------------------------------------------------------------
+// Helpers
+// ---------------------------------------------------------------------------
 
 function navLinkClass(active: boolean): string {
   return cn(
@@ -50,131 +51,93 @@ function SectionLabel({ children }: { children: string }): ReactElement {
 }
 
 function initials(name: string): string {
-  return name
-    .split(/\s+/)
-    .filter(Boolean)
-    .slice(0, 2)
-    .map((p) => p[0]?.toUpperCase() ?? '')
-    .join('') || '?'
+  return (
+    name
+      .split(/\s+/)
+      .filter(Boolean)
+      .slice(0, 2)
+      .map((p) => p[0]?.toUpperCase() ?? '')
+      .join('') || '?'
+  )
 }
 
 function roleLabel(role: string): string {
   return role.replace(/_/g, ' ')
 }
 
+// ---------------------------------------------------------------------------
+// Sidebar
+// ---------------------------------------------------------------------------
+
 export function Sidebar(): ReactElement {
   const user = useAuthStore((s) => s.user)
-  const { hasPermission } = useAuth()
+  const { hasAnyPermission, logout } = useAuth()
 
-  const { data: queueWaiting } = useQueue({
-    status: 'waiting',
-    page_size: 1,
-  })
-  const waitingCount = queueWaiting?.count ?? 0
+  // Live counts for badge display — only fetched once, shared across the tree
+  const { data: queueWaiting } = useQueue({ status: 'waiting', page_size: 1 })
+  const { data: pendingOrders } = useLabOrders({ status: 'pending', page_size: 1 })
 
-  const { data: pendingOrders } = useLabOrders({
-    status: 'pending',
-    page_size: 1,
-  })
-  const pendingLabCount = pendingOrders?.count ?? 0
+  const counts: Record<string, number> = {
+    queue_waiting: queueWaiting?.count ?? 0,
+    lab_pending: pendingOrders?.count ?? 0,
+  }
 
-  const canQueue =
-    hasPermission('manage_queue') || hasPermission('start_visit_from_queue')
-  const canLab =
-    hasPermission('order_lab_test') ||
-    hasPermission('process_lab_order') ||
-    hasPermission('write_lab_result')
-  const canBilling =
-    hasPermission('manage_billing') || hasPermission('void_invoice')
-  const canUsers = hasPermission('manage_users')
-  const canAudit = hasPermission('view_audit_log')
+  // Filter visible items once per render using the centralised permission check
+  const visibleItems = NAV_ITEMS.filter((item) =>
+    hasAnyPermission(item.requiredPermissions),
+  )
 
   return (
     <div className="flex h-full flex-col">
+      {/* Brand */}
       <div className="flex shrink-0 items-start gap-2 border-b border-border p-3">
         <div className="flex size-9 shrink-0 items-center justify-center rounded-lg bg-teal-600 text-white shadow-sm">
           <Building2 className="size-4" aria-hidden />
         </div>
         <div className="min-w-0 flex-1">
-          <div className="truncate text-sm font-semibold text-foreground">
-            Clinic
-          </div>
-          <div className="truncate text-xs text-muted-foreground" title={user?.clinic_id}>
-            {user?.clinic_id
-              ? `${user.clinic_id.slice(0, 8)}…`
-              : '—'}
+          <div className="truncate text-sm font-semibold text-foreground">Clinic</div>
+          <div
+            className="truncate text-xs text-muted-foreground"
+            title={user?.clinic_id}
+          >
+            {user?.clinic_id ? `${user.clinic_id.slice(0, 8)}…` : '—'}
           </div>
         </div>
       </div>
 
+      {/* Nav — fully config-driven, zero scattered permission logic */}
       <nav className="flex flex-1 flex-col gap-6 overflow-y-auto p-3">
-        <div>
-          <SectionLabel>Clinic</SectionLabel>
-          <div className="flex flex-col gap-0.5">
-            <NavLink to="/dashboard" className={({ isActive }) => navLinkClass(isActive)}>
-              <LayoutGrid className="size-4 shrink-0" aria-hidden />
-              Dashboard
-            </NavLink>
-            <NavLink to="/patients" className={({ isActive }) => navLinkClass(isActive)}>
-              <Users className="size-4 shrink-0" aria-hidden />
-              Patients
-            </NavLink>
-            <NavLink to="/visits" className={({ isActive }) => navLinkClass(isActive)}>
-              <ClipboardList className="size-4 shrink-0" aria-hidden />
-              Visits
-            </NavLink>
-            {canQueue ? (
-              <NavLink to="/queue" className={({ isActive }) => navLinkClass(isActive)}>
-                <UsersRound className="size-4 shrink-0" aria-hidden />
-                <span className="flex-1 truncate">Queue</span>
-                <NavCount>{waitingCount}</NavCount>
-              </NavLink>
-            ) : null}
-          </div>
-        </div>
+        {NAV_SECTIONS.map((section: NavSection) => {
+          const items = visibleItems.filter((i) => i.section === section)
+          if (items.length === 0) return null
 
-        {(canLab || canBilling) ? (
-          <div>
-            <SectionLabel>Lab &amp; billing</SectionLabel>
-            <div className="flex flex-col gap-0.5">
-              {canLab ? (
-                <NavLink to="/lab" className={({ isActive }) => navLinkClass(isActive)}>
-                  <Microscope className="size-4 shrink-0" aria-hidden />
-                  <span className="flex-1 truncate">Lab</span>
-                  <NavCount>{pendingLabCount}</NavCount>
-                </NavLink>
-              ) : null}
-              {canBilling ? (
-                <NavLink to="/billing" className={({ isActive }) => navLinkClass(isActive)}>
-                  <CreditCard className="size-4 shrink-0" aria-hidden />
-                  Billing
-                </NavLink>
-              ) : null}
-            </div>
-          </div>
-        ) : null}
+          return (
+            <div key={section}>
+              <SectionLabel>{SECTION_LABELS[section]}</SectionLabel>
+              <div className="flex flex-col gap-0.5">
+                {items.map((item) => {
+                  const Icon = item.icon
+                  const count = item.countKey ? counts[item.countKey] : 0
 
-        {(canUsers || canAudit) ? (
-          <div>
-            <SectionLabel>Admin</SectionLabel>
-            <div className="flex flex-col gap-0.5">
-              {canUsers ? (
-                <NavLink to="/users" className={({ isActive }) => navLinkClass(isActive)}>
-                  <UserCog className="size-4 shrink-0" aria-hidden />
-                  Users
-                </NavLink>
-              ) : null}
-              {canAudit ? (
-                <NavLink to="/audit" className={({ isActive }) => navLinkClass(isActive)}>
-                  <ScrollText className="size-4 shrink-0" aria-hidden />
-                  Audit
-                </NavLink>
-              ) : null}
+                  return (
+                    <NavLink
+                      key={item.id}
+                      to={item.path}
+                      className={({ isActive }) => navLinkClass(isActive)}
+                    >
+                      <Icon className="size-4 shrink-0" aria-hidden />
+                      <span className="flex-1 truncate">{item.label}</span>
+                      {count > 0 && <NavCount>{count}</NavCount>}
+                    </NavLink>
+                  )
+                })}
+              </div>
             </div>
-          </div>
-        ) : null}
+          )
+        })}
       </nav>
 
+      {/* User footer */}
       <div className="mt-auto shrink-0 border-t border-border p-3">
         <div className="flex items-center gap-2">
           <Avatar size="sm">
@@ -190,6 +153,15 @@ export function Sidebar(): ReactElement {
               {user?.role ? roleLabel(user.role) : ''}
             </div>
           </div>
+          <Button
+            variant="ghost"
+            size="icon-sm"
+            onClick={() => void logout()}
+            aria-label="Sign out"
+            className="shrink-0 text-muted-foreground hover:text-foreground"
+          >
+            <LogOut className="size-4" />
+          </Button>
         </div>
       </div>
     </div>

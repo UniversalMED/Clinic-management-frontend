@@ -30,10 +30,11 @@ import { cn } from '@/lib/utils'
 // Filter tabs
 // ---------------------------------------------------------------------------
 
-type FilterValue = 'all' | 'waiting' | 'called' | 'in_progress' | 'completed'
+type FilterValue = 'all' | 'scheduled' | 'waiting' | 'called' | 'in_progress' | 'completed'
 
 const FILTER_TABS: { label: string; value: FilterValue }[] = [
   { label: 'All', value: 'all' },
+  { label: 'Scheduled', value: 'scheduled' },
   { label: 'Waiting', value: 'waiting' },
   { label: 'Called', value: 'called' },
   { label: 'In Progress', value: 'in_progress' },
@@ -41,7 +42,7 @@ const FILTER_TABS: { label: string; value: FilterValue }[] = [
 ]
 
 const ALL_STATUSES =
-  'checked_in,waiting,called,in_progress,completed,no_show'
+  'scheduled,checked_in,waiting,called,in_progress,completed,no_show'
 
 function statusParam(filter: FilterValue): string {
   return filter === 'all' ? ALL_STATUSES : filter

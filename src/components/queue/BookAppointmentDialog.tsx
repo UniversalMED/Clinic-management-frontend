@@ -139,6 +139,7 @@ export function BookAppointmentDialog() {
   const [patient, setPatient] = useState<Patient | null>(null)
   const [doctorId, setDoctorId] = useState<string>('')
   const [scheduledAt, setScheduledAt] = useState(defaultDatetime())
+  const [durationMinutes, setDurationMinutes] = useState(30)
   const [type, setType] = useState<'specialist' | 'general'>('general')
   const [notes, setNotes] = useState('')
 
@@ -153,6 +154,7 @@ export function BookAppointmentDialog() {
     setPatient(null)
     setDoctorId('')
     setScheduledAt(defaultDatetime())
+    setDurationMinutes(30)
     setType('general')
     setNotes('')
   }
@@ -171,6 +173,7 @@ export function BookAppointmentDialog() {
         patient_id: patient.id,
         doctor_id: doctorId || null,
         scheduled_at: new Date(scheduledAt).toISOString(),
+        duration_minutes: durationMinutes,
         type,
         notes: notes.trim() || undefined,
       },
@@ -212,7 +215,7 @@ export function BookAppointmentDialog() {
             <Label>Doctor (optional)</Label>
             <Select
               value={doctorId}
-              onValueChange={setDoctorId}
+              onValueChange={(v) => setDoctorId(v ?? '')}
             >
               <SelectTrigger className="w-full">
                 <SelectValue placeholder="Any available doctor" />
@@ -235,6 +238,21 @@ export function BookAppointmentDialog() {
               type="datetime-local"
               value={scheduledAt}
               onChange={(e) => setScheduledAt(e.target.value)}
+              required
+              className="h-8 w-full rounded-lg border border-input bg-transparent px-2.5 py-1 text-sm outline-none transition-colors focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50 dark:bg-input/30"
+            />
+          </div>
+
+          {/* Duration */}
+          <div className="space-y-1.5">
+            <Label htmlFor="duration-minutes">Duration (minutes)</Label>
+            <input
+              id="duration-minutes"
+              type="number"
+              min={5}
+              max={480}
+              value={durationMinutes}
+              onChange={(e) => setDurationMinutes(Number(e.target.value))}
               required
               className="h-8 w-full rounded-lg border border-input bg-transparent px-2.5 py-1 text-sm outline-none transition-colors focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50 dark:bg-input/30"
             />

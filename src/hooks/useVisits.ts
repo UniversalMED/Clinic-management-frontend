@@ -2,12 +2,15 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 
 import {
   createConsultation,
+  createPrescription,
   createVisit,
   getVisit,
   listConsultations,
+  listPrescriptions,
   listVisits,
   updateVisit,
   type CreateConsultationPayload,
+  type CreatePrescriptionPayload,
   type CreateVisitPayload,
   type UpdateVisitPayload,
 } from '@/api/visits'
@@ -82,6 +85,24 @@ export function useCreateConsultation() {
           visit_id: variables.visit_id,
         }),
       })
+    },
+  })
+}
+
+export function usePrescriptions(consultationId: string | undefined) {
+  return useQuery({
+    queryKey: queryKeys.prescriptions.list({ consultation_id: consultationId ?? '' }),
+    queryFn: () => listPrescriptions({ consultation_id: consultationId }),
+    enabled: Boolean(consultationId),
+  })
+}
+
+export function useCreatePrescription() {
+  const queryClient = useQueryClient()
+  return useMutation({
+    mutationFn: (data: CreatePrescriptionPayload) => createPrescription(data),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: queryKeys.prescriptions.all })
     },
   })
 }

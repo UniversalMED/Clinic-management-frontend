@@ -50,8 +50,10 @@ function getAge(dob: string): string {
   return `${differenceInYears(new Date(), parseISO(dob))} yrs`
 }
 
-function genderLabel(g: 'M' | 'F' | 'other'): string {
-  return g === 'M' ? 'Male' : g === 'F' ? 'Female' : 'Other'
+function genderLabel(g: string | null): string {
+  if (g === 'male') return 'Male'
+  if (g === 'female') return 'Female'
+  return '—'
 }
 
 // ---------------------------------------------------------------------------
@@ -142,7 +144,7 @@ function OverviewTab({
           <InfoRow
             icon={<UserRound className="h-4 w-4" />}
             label="Gender"
-            value={genderLabel(patient.gender)}
+            value={genderLabel(patient.gender ?? null)}
           />
           <InfoRow
             icon={<CalendarDays className="h-4 w-4" />}
@@ -196,12 +198,9 @@ function VisitsTab({ patientId }: { patientId: string }) {
     {
       accessorKey: 'status',
       header: 'Status',
-      cell: ({ row }) => {
-        // Map visit status to invoice domain for visual consistency
-        const domain = 'invoice' as const
-        const status = row.original.status === 'open' ? 'finalized' : 'draft'
-        return <StatusBadge domain={domain} status={status} />
-      },
+      cell: ({ row }) => (
+        <StatusBadge domain="visit" status={row.original.status} />
+      ),
     },
     {
       id: 'actions',
@@ -482,7 +481,7 @@ export default function PatientDetail() {
             {patient && (
               <PatientForm
                 patient={patient}
-                onSuccess={() => setEditDrawerOpen(false)}
+                onSuccess={() => { setEditDrawerOpen(false) }}
               />
             )}
           </div>

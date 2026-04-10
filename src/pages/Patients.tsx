@@ -28,8 +28,8 @@ function getAge(dob: string): number {
   return differenceInYears(new Date(), parseISO(dob))
 }
 
-function genderLabel(g: 'M' | 'F' | 'other'): string {
-  return g === 'M' ? 'Male' : g === 'F' ? 'Female' : 'Other'
+function genderLabel(g: string | null): string {
+  return g === 'male' ? 'Male' : g === 'female' ? 'Female' : '—'
 }
 
 // ---------------------------------------------------------------------------
@@ -194,7 +194,10 @@ export default function Patients() {
           </DrawerHeader>
           <div className="flex-1 overflow-y-auto px-4 pb-4">
             <PatientForm
-              onSuccess={() => setDrawerOpen(false)}
+              onSuccess={(patient) => {
+                setDrawerOpen(false)
+                navigate(`/patients/${patient.id}`)
+              }}
             />
           </div>
         </DrawerContent>

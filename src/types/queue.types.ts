@@ -1,4 +1,5 @@
 export type QueueStatus =
+  | 'scheduled'
   | 'checked_in'
   | 'waiting'
   | 'called'
@@ -27,7 +28,7 @@ export interface QueueEntry {
   created_at: string
 }
 
-export type AppointmentStatus = 'active' | 'cancelled' | 'completed' | 'affected'
+export type AppointmentStatus = 'active' | 'cancelled' | 'rescheduled' | 'affected'
 
 export interface Appointment {
   id: string

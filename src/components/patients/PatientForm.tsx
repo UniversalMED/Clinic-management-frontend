@@ -8,23 +8,21 @@ import { useCreatePatient, useUpdatePatient } from '@/hooks/usePatients'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from '@/components/ui/select'
 
 // ---------------------------------------------------------------------------
 // Schema
 // ---------------------------------------------------------------------------
 
+const PHONE_RE = /^(09\d{8}|\+251\d{9})$/
+
 const schema = z.object({
   full_name: z.string().min(1, 'Name is required'),
-  gender: z.enum(['M', 'F', 'other']),
+  gender: z.enum(['male', 'female']),
   date_of_birth: z.string().min(1, 'Date of birth is required'),
-  phone: z.string().min(1, 'Phone is required'),
+  phone: z
+    .string()
+    .min(1, 'Phone is required')
+    .regex(PHONE_RE, 'Phone must start with 09 (e.g. 0912345678) or +251 (e.g. +251912345678)'),
 })
 
 type FormValues = z.infer<typeof schema>
@@ -44,7 +42,7 @@ function FieldError({ message }: { message?: string }) {
 
 export interface PatientFormProps {
   patient?: Patient
-  onSuccess?: () => void
+  onSuccess?: (saved: Patient) => void
 }
 
 export function PatientForm({ patient, onSuccess }: PatientFormProps) {
@@ -56,14 +54,12 @@ export function PatientForm({ patient, onSuccess }: PatientFormProps) {
   const {
     register,
     handleSubmit,
-    watch,
-    setValue,
     formState: { errors },
   } = useForm<FormValues>({
     resolver: standardSchemaResolver(schema),
     defaultValues: {
       full_name: patient?.full_name ?? '',
-      gender: patient?.gender ?? 'M',
+      gender: patient?.gender ?? 'male',
       date_of_birth: patient?.date_of_birth ?? '',
       phone: patient?.phone ?? '',
     },
@@ -74,18 +70,18 @@ export function PatientForm({ patient, onSuccess }: PatientFormProps) {
       updatePatient.mutate(
         { id: patient.id, data },
         {
-          onSuccess: () => {
+          onSuccess: (saved) => {
             toast.success('Patient updated')
-            onSuccess?.()
+            onSuccess?.(saved)
           },
           onError: () => toast.error('Failed to update patient'),
         },
       )
     } else {
       createPatient.mutate(data, {
-        onSuccess: () => {
+        onSuccess: (saved) => {
           toast.success('Patient created')
-          onSuccess?.()
+          onSuccess?.(saved)
         },
         onError: () => toast.error('Failed to create patient'),
       })
@@ -107,20 +103,15 @@ export function PatientForm({ patient, onSuccess }: PatientFormProps) {
 
       {/* Gender */}
       <div className="space-y-1.5">
-        <Label>Gender</Label>
-        <Select
-          value={watch('gender')}
-          onValueChange={(v) => setValue('gender', v as 'M' | 'F' | 'other')}
+        <Label htmlFor="gender">Gender</Label>
+        <select
+          id="gender"
+          className="h-8 w-full rounded-lg border border-input bg-transparent px-2.5 py-1 text-sm outline-none transition-colors focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50 dark:bg-input/30"
+          {...register('gender')}
         >
-          <SelectTrigger className="w-full">
-            <SelectValue />
-          </SelectTrigger>
-          <SelectContent>
-            <SelectItem value="M">Male</SelectItem>
-            <SelectItem value="F">Female</SelectItem>
-            <SelectItem value="other">Other</SelectItem>
-          </SelectContent>
-        </Select>
+          <option value="male">Male</option>
+          <option value="female">Female</option>
+        </select>
         <FieldError message={errors.gender?.message} />
       </div>
 
@@ -130,7 +121,8 @@ export function PatientForm({ patient, onSuccess }: PatientFormProps) {
         <input
           id="date_of_birth"
           type="date"
-          className="h-8 w-full rounded-lg border border-input bg-transparent px-2.5 py-1 text-sm outline-none transition-colors focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50 dark:bg-input/30"
+          max={new Date().toISOString().slice(0, 10)}
+          className="h-9 w-full cursor-pointer rounded-lg border border-input bg-transparent px-2.5 py-1 text-sm outline-none transition-colors focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50 dark:bg-input/30"
           {...register('date_of_birth')}
         />
         <FieldError message={errors.date_of_birth?.message} />

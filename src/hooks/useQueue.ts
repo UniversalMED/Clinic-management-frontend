@@ -2,6 +2,7 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 
 import {
   callPatient,
+  cancelAppointment,
   checkIn,
   completeVisit,
   createAppointment,
@@ -11,11 +12,14 @@ import {
   reorderQueue,
   reinsert,
   startVisit,
+  updateAppointment,
+  type CancelAppointmentPayload,
   type CheckInPayload,
   type CreateAppointmentPayload,
   type MarkNoShowPayload,
   type ReinsertPayload,
   type ReorderQueuePayload,
+  type UpdateAppointmentPayload,
 } from '@/api/queue'
 import { queryKeys } from '@/utils/queryKeys'
 
@@ -64,6 +68,7 @@ export function useCheckIn() {
     mutationFn: (data: CheckInPayload) => checkIn(data),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: queryKeys.queue.all })
+      queryClient.invalidateQueries({ queryKey: queryKeys.appointments.all })
     },
   })
 }
@@ -138,6 +143,28 @@ export function useReorderQueue() {
     mutationFn: (data: ReorderQueuePayload) => reorderQueue(data),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: queryKeys.queue.all })
+    },
+  })
+}
+
+export function useUpdateAppointment() {
+  const queryClient = useQueryClient()
+  return useMutation({
+    mutationFn: ({ id, data }: { id: string; data: UpdateAppointmentPayload }) =>
+      updateAppointment(id, data),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: queryKeys.appointments.all })
+    },
+  })
+}
+
+export function useCancelAppointment() {
+  const queryClient = useQueryClient()
+  return useMutation({
+    mutationFn: ({ id, data }: { id: string; data: CancelAppointmentPayload }) =>
+      cancelAppointment(id, data),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: queryKeys.appointments.all })
     },
   })
 }

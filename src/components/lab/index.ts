@@ -1,3 +1,1 @@
-// TODO: lab feature components
-
-export {}
+export { ResultEntryForm } from './ResultEntryForm'

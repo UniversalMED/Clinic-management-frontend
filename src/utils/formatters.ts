@@ -11,7 +11,8 @@ export function formatCurrency(amount: string | number): string {
   return etb.format(n)
 }
 
-export function formatDate(iso: string): string {
+export function formatDate(iso: string | null | undefined): string {
+  if (!iso) return '—'
   const d = parseISO(iso)
   const day = d.getDate().toString().padStart(2, '0')
   const months = [
@@ -35,6 +36,7 @@ export function formatDate(iso: string): string {
   return `${day} ${mon} ${year}, ${hh}:${mm}`
 }
 
-export function formatRelative(iso: string): string {
+export function formatRelative(iso: string | null | undefined): string {
+  if (!iso) return '—'
   return formatDistanceToNow(parseISO(iso), { addSuffix: true })
 }

@@ -5,13 +5,30 @@ import { toast } from 'sonner'
 
 import type { Patient } from '@/types/patient.types'
 import type { Appointment } from '@/types/queue.types'
-import { useCheckIn, useAppointments } from '@/hooks/useQueue'
+import { useCheckIn, useAppointments, useUpdateAppointment, useCancelAppointment } from '@/hooks/useQueue'
 import { usePatients } from '@/hooks/usePatients'
 import { useUsers } from '@/hooks/useUsers'
 import { PermissionGate } from '@/components/ui/PermissionGate'
+import { StatusBadge } from '@/components/ui/StatusBadge'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
+import { Label } from '@/components/ui/label'
 import { Skeleton } from '@/components/ui/skeleton'
+import { Textarea } from '@/components/ui/textarea'
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select'
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogFooter,
+} from '@/components/ui/dialog'
 import { BookAppointmentDialog } from '@/components/queue/BookAppointmentDialog'
 import { cn } from '@/lib/utils'
 import { formatDate } from '@/utils/formatters'
@@ -171,6 +188,201 @@ function WalkInTab({ onSuccess }: WalkInTabProps) {
 }
 
 // ---------------------------------------------------------------------------
+// Edit appointment dialog
+// ---------------------------------------------------------------------------
+
+interface EditAppointmentDialogProps {
+  appointment: Appointment
+  doctors: { id: string; full_name: string }[]
+}
+
+function EditAppointmentDialog({ appointment, doctors }: EditAppointmentDialogProps) {
+  const [open, setOpen] = useState(false)
+  const [doctorId, setDoctorId] = useState(appointment.doctor_id ?? '')
+  const [scheduledAt, setScheduledAt] = useState(
+    format(new Date(appointment.scheduled_at), "yyyy-MM-dd'T'HH:mm"),
+  )
+  const [durationMinutes, setDurationMinutes] = useState(
+    appointment.duration_minutes ?? 30,
+  )
+  const [notes, setNotes] = useState(appointment.notes ?? '')
+
+  const updateAppointment = useUpdateAppointment()
+
+  function handleSubmit(e: React.FormEvent) {
+    e.preventDefault()
+    updateAppointment.mutate(
+      {
+        id: appointment.id,
+        data: {
+          doctor_id: doctorId || null,
+          scheduled_at: new Date(scheduledAt).toISOString(),
+          duration_minutes: durationMinutes,
+          notes: notes.trim() || undefined,
+        },
+      },
+      {
+        onSuccess: () => {
+          toast.success('Appointment updated')
+          setOpen(false)
+        },
+        onError: () => toast.error('Failed to update appointment'),
+      },
+    )
+  }
+
+  return (
+    <Dialog open={open} onOpenChange={setOpen}>
+      <button
+        type="button"
+        onClick={() => setOpen(true)}
+        className="rounded px-1.5 py-0.5 text-xs font-medium text-muted-foreground hover:bg-muted hover:text-foreground"
+      >
+        Edit
+      </button>
+      <DialogContent className="sm:max-w-sm">
+        <DialogHeader>
+          <DialogTitle>Edit appointment</DialogTitle>
+        </DialogHeader>
+        <form onSubmit={handleSubmit} className="space-y-3">
+          <div className="space-y-1.5">
+            <Label>Doctor (optional)</Label>
+            <Select value={doctorId} onValueChange={(v) => setDoctorId(v ?? '')}>
+              <SelectTrigger className="w-full">
+                <SelectValue placeholder="Any available doctor" />
+              </SelectTrigger>
+              <SelectContent>
+                {doctors.map((d) => (
+                  <SelectItem key={d.id} value={d.id}>
+                    {d.full_name}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+          <div className="space-y-1.5">
+            <Label htmlFor="edit-scheduled-at">Date & time</Label>
+            <input
+              id="edit-scheduled-at"
+              type="datetime-local"
+              value={scheduledAt}
+              onChange={(e) => setScheduledAt(e.target.value)}
+              required
+              className="h-8 w-full rounded-lg border border-input bg-transparent px-2.5 py-1 text-sm outline-none transition-colors focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50 dark:bg-input/30"
+            />
+          </div>
+          <div className="space-y-1.5">
+            <Label htmlFor="edit-duration">Duration (minutes)</Label>
+            <input
+              id="edit-duration"
+              type="number"
+              min={5}
+              max={480}
+              value={durationMinutes}
+              onChange={(e) => setDurationMinutes(Number(e.target.value))}
+              required
+              className="h-8 w-full rounded-lg border border-input bg-transparent px-2.5 py-1 text-sm outline-none transition-colors focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50 dark:bg-input/30"
+            />
+          </div>
+          <div className="space-y-1.5">
+            <Label htmlFor="edit-notes">Notes (optional)</Label>
+            <Textarea
+              id="edit-notes"
+              value={notes}
+              onChange={(e) => setNotes(e.target.value)}
+              className="min-h-16"
+            />
+          </div>
+          <DialogFooter showCloseButton>
+            <Button
+              type="submit"
+              disabled={!scheduledAt || updateAppointment.isPending}
+            >
+              {updateAppointment.isPending ? 'Saving…' : 'Save'}
+            </Button>
+          </DialogFooter>
+        </form>
+      </DialogContent>
+    </Dialog>
+  )
+}
+
+// ---------------------------------------------------------------------------
+// Cancel appointment dialog
+// ---------------------------------------------------------------------------
+
+interface CancelAppointmentDialogProps {
+  appointment: Appointment
+}
+
+function CancelAppointmentDialog({ appointment }: CancelAppointmentDialogProps) {
+  const [open, setOpen] = useState(false)
+  const [reason, setReason] = useState('')
+
+  const cancelAppointment = useCancelAppointment()
+
+  function handleSubmit(e: React.FormEvent) {
+    e.preventDefault()
+    if (!reason.trim()) return
+    cancelAppointment.mutate(
+      { id: appointment.id, data: { cancel_reason: reason.trim() } },
+      {
+        onSuccess: () => {
+          toast.success('Appointment cancelled')
+          setOpen(false)
+          setReason('')
+        },
+        onError: () => toast.error('Failed to cancel appointment'),
+      },
+    )
+  }
+
+  return (
+    <Dialog open={open} onOpenChange={setOpen}>
+      <button
+        type="button"
+        onClick={() => setOpen(true)}
+        className="rounded px-1.5 py-0.5 text-xs font-medium text-destructive hover:bg-destructive/10"
+      >
+        Cancel
+      </button>
+      <DialogContent className="sm:max-w-sm">
+        <DialogHeader>
+          <DialogTitle>Cancel appointment</DialogTitle>
+        </DialogHeader>
+        <form onSubmit={handleSubmit} className="space-y-3">
+          <p className="text-sm text-muted-foreground">
+            This cannot be undone. The patient will need a new appointment.
+          </p>
+          <div className="space-y-1.5">
+            <Label htmlFor="cancel-reason">
+              Reason <span className="text-destructive">*</span>
+            </Label>
+            <Textarea
+              id="cancel-reason"
+              placeholder="Enter cancellation reason…"
+              value={reason}
+              onChange={(e) => setReason(e.target.value)}
+              required
+              className="min-h-16"
+            />
+          </div>
+          <DialogFooter showCloseButton>
+            <Button
+              type="submit"
+              variant="destructive"
+              disabled={!reason.trim() || cancelAppointment.isPending}
+            >
+              {cancelAppointment.isPending ? 'Cancelling…' : 'Cancel appointment'}
+            </Button>
+          </DialogFooter>
+        </form>
+      </DialogContent>
+    </Dialog>
+  )
+}
+
+// ---------------------------------------------------------------------------
 // Appointment tab
 // ---------------------------------------------------------------------------
 
@@ -197,6 +409,7 @@ function AppointmentTab({ onSuccess }: AppointmentTabProps) {
   const doctorMap = new Map(
     usersData?.results.map((u) => [u.id, u.full_name]) ?? [],
   )
+  const doctors = usersData?.results.filter((u) => u.role === 'doctor') ?? []
 
   function handleCheckIn(appt: Appointment) {
     checkIn.mutate(
@@ -239,32 +452,47 @@ function AppointmentTab({ onSuccess }: AppointmentTabProps) {
       {appointments.map((appt) => (
         <li
           key={appt.id}
-          className="flex items-center gap-2 rounded-lg border bg-card p-3"
+          className="rounded-lg border bg-card p-3"
         >
-          <div className="min-w-0 flex-1 text-sm">
-            <p className="truncate font-medium">
-              {patientMap.get(appt.patient_id) ?? `…${appt.patient_id.slice(-6)}`}
-            </p>
-            <p className="text-xs text-muted-foreground">
-              {formatDate(appt.scheduled_at)}
-              {appt.doctor_id && (
-                <>
-                  {' · '}
-                  {doctorMap.get(appt.doctor_id) ?? 'Dr.'}
-                </>
-              )}
-              {' · '}
-              <span className="capitalize">{appt.type}</span>
-            </p>
+          <div className="flex items-center gap-2">
+            <div className="min-w-0 flex-1 text-sm">
+              <div className="flex flex-wrap items-center gap-1.5">
+                <p className="truncate font-medium">
+                  {patientMap.get(appt.patient_id) ?? `…${appt.patient_id.slice(-6)}`}
+                </p>
+                <StatusBadge domain="appointment" status={appt.status} />
+              </div>
+              <p className="text-xs text-muted-foreground">
+                {formatDate(appt.scheduled_at)}
+                {appt.doctor_id && (
+                  <>
+                    {' · '}
+                    {doctorMap.get(appt.doctor_id) ?? 'Dr.'}
+                  </>
+                )}
+                {' · '}
+                <span className="capitalize">{appt.type}</span>
+                {' · '}
+                {appt.duration_minutes} min
+              </p>
+            </div>
+            {appt.status === 'active' && (
+              <Button
+                size="xs"
+                variant="outline"
+                onClick={() => handleCheckIn(appt)}
+                disabled={checkIn.isPending}
+              >
+                Check in
+              </Button>
+            )}
           </div>
-          <Button
-            size="xs"
-            variant="outline"
-            onClick={() => handleCheckIn(appt)}
-            disabled={checkIn.isPending}
-          >
-            Check in
-          </Button>
+          {appt.status === 'active' && (
+            <div className="mt-2 flex gap-1 border-t pt-2">
+              <EditAppointmentDialog appointment={appt} doctors={doctors} />
+              <CancelAppointmentDialog appointment={appt} />
+            </div>
+          )}
         </li>
       ))}
     </ul>

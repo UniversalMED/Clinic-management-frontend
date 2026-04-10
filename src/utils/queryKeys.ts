@@ -14,6 +14,10 @@ export const queryKeys = {
     list: (params: object) => ['consultations', 'list', params] as const,
     detail: (id: string) => ['consultations', 'detail', id] as const,
   },
+  prescriptions: {
+    all: ['prescriptions'] as const,
+    list: (params: object) => ['prescriptions', 'list', params] as const,
+  },
   queue: {
     all: ['queue'] as const,
     list: (params: object) => ['queue', 'list', params] as const,
