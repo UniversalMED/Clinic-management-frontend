@@ -3,7 +3,7 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { acknowledge, list as listNotifications } from '@/api/notifications'
 import { queryKeys } from '@/utils/queryKeys'
 
-const NOTIFICATION_POLL_MS = 60_000
+const NOTIFICATION_POLL_MS = 5_000
 
 export function useNotifications(params?: {
   page?: number

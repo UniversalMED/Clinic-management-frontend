@@ -5,6 +5,7 @@ import client from './client'
 
 export type CreateVisitPayload = {
   patient_id: string
+  assigned_doctor_id?: string | null
 }
 
 export type UpdateVisitPayload = Partial<

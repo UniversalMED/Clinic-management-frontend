@@ -7,7 +7,7 @@ import { toast } from 'sonner'
 import type { Invoice } from '@/types/billing.types'
 import type { TestOrder } from '@/types/lab.types'
 import { useAuth } from '@/hooks/useAuth'
-import { useInvoices, useCreateInvoice } from '@/hooks/useBilling'
+import { useInvoices, useCreateInvoice, useQuickPayCash } from '@/hooks/useBilling'
 import { useLabOrders } from '@/hooks/useLab'
 import { usePatients } from '@/hooks/usePatients'
 import { useVisits } from '@/hooks/useVisits'
@@ -119,6 +119,7 @@ function buildColumns(onRowClick: (id: string) => void): ColumnDef<Invoice>[] {
 function PendingBillingSection() {
   const navigate = useNavigate()
   const createInvoice = useCreateInvoice()
+  const quickPayCash = useQuickPayCash()
 
   const { data, isLoading } = useLabOrders({
     status: 'awaiting_payment',
@@ -147,6 +148,18 @@ function PendingBillingSection() {
     )
   }
 
+  function handleQuickPayCash(visitId: string) {
+    quickPayCash.mutate(visitId, {
+      onSuccess: (res) => {
+        toast.success(`Cash payment collected — ETB ${parseFloat(res.invoice.total_amount).toFixed(2)}`)
+      },
+      onError: (err: unknown) => {
+        const msg = (err as { response?: { data?: { detail?: string } } })?.response?.data?.detail
+        toast.error(msg ?? 'Failed to collect payment')
+      },
+    })
+  }
+
   if (isLoading) {
     return (
       <div className="space-y-3">
@@ -167,6 +180,9 @@ function PendingBillingSection() {
 
   return (
     <div className="space-y-3">
+      <div className="rounded-lg border border-amber-200 bg-amber-50 px-4 py-2 text-xs text-amber-800 dark:border-amber-800 dark:bg-amber-950/30 dark:text-amber-200">
+        <strong>Quick Pay Cash</strong> collects payment instantly. Use <strong>Create Invoice</strong> for itemized billing or future reference.
+      </div>
       {Object.entries(byVisit).map(([visitId, visitOrders]) => {
         const total = visitOrders.reduce(
           (sum, o) => sum + parseFloat(o.price_at_order_time || '0'),
@@ -205,13 +221,23 @@ function PendingBillingSection() {
                 Total: {formatCurrency(String(total.toFixed(2)))}
               </p>
             </div>
-            <Button
-              size="sm"
-              onClick={() => handleCreateInvoice(visitId)}
-              disabled={createInvoice.isPending}
-            >
-              Create Invoice
-            </Button>
+            <div className="flex flex-col gap-2 shrink-0">
+              <Button
+                size="sm"
+                onClick={() => handleQuickPayCash(visitId)}
+                disabled={quickPayCash.isPending}
+              >
+                {quickPayCash.isPending ? 'Processing…' : 'Quick Pay Cash'}
+              </Button>
+              <Button
+                size="sm"
+                variant="outline"
+                onClick={() => handleCreateInvoice(visitId)}
+                disabled={createInvoice.isPending}
+              >
+                Create Invoice
+              </Button>
+            </div>
           </div>
         )
       })}

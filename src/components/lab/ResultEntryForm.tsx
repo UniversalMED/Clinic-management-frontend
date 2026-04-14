@@ -2,7 +2,7 @@ import { useState } from 'react'
 import { Plus, Trash2 } from 'lucide-react'
 import { toast } from 'sonner'
 
-import { useCreateLabResult } from '@/hooks/useLab'
+import { useCreateLabResult, useUpdateLabOrder } from '@/hooks/useLab'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
@@ -33,6 +33,7 @@ export interface ResultEntryFormProps {
 
 export function ResultEntryForm({ orderId, onSuccess }: ResultEntryFormProps) {
   const createResult = useCreateLabResult()
+  const updateOrder = useUpdateLabOrder()
 
   const [pairs, setPairs] = useState<KVPair[]>([
     { uid: uid(), key: '', value: '' },
@@ -79,8 +80,21 @@ export function ResultEntryForm({ orderId, onSuccess }: ResultEntryFormProps) {
       },
       {
         onSuccess: () => {
-          toast.success('Result recorded')
-          onSuccess?.()
+          // Auto-complete the order when result is submitted
+          updateOrder.mutate(
+            { id: orderId, data: { status: 'completed' } },
+            {
+              onSuccess: () => {
+                toast.success('Result recorded and order completed')
+                onSuccess?.()
+              },
+              onError: () => {
+                // Result was saved even if status update failed
+                toast.success('Result recorded')
+                onSuccess?.()
+              },
+            },
+          )
         },
         onError: () => toast.error('Failed to record result'),
       },
@@ -146,9 +160,9 @@ export function ResultEntryForm({ orderId, onSuccess }: ResultEntryFormProps) {
       <Button
         type="submit"
         className="w-full"
-        disabled={createResult.isPending}
+        disabled={createResult.isPending || updateOrder.isPending}
       >
-        {createResult.isPending ? 'Submitting…' : 'Submit result'}
+        {(createResult.isPending || updateOrder.isPending) ? 'Submitting…' : 'Submit result & complete'}
       </Button>
     </form>
   )

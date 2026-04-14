@@ -3,7 +3,7 @@ export type TestOrderStatus =
   | 'pending'
   | 'in_progress'
   | 'completed'
-  | 'cancelled'
+  | 'canceled'
 
 export interface LabTest {
   id: string

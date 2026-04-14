@@ -1,10 +1,14 @@
 import type { ReactElement } from 'react'
 import { Outlet } from 'react-router-dom'
 
+import { useNotificationPopups } from '@/hooks/useNotificationPopups'
 import { Sidebar } from '@/components/layout/Sidebar'
 import { Topbar } from '@/components/layout/Topbar'
 
 export function AppShell(): ReactElement {
+  // Watches for new notifications and fires toast popups
+  useNotificationPopups()
+
   return (
     <div className="flex min-h-screen bg-background">
       <aside className="fixed inset-y-0 left-0 z-40 flex w-[240px] flex-col border-r border-border bg-card">

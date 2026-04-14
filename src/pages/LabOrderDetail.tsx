@@ -106,8 +106,9 @@ export default function LabOrderDetail() {
   const result = resultsData?.results[0] ?? null
   const canProcess = hasPermission('process_lab_order')
   const canWriteResult = hasPermission('write_lab_result')
+  const canSeePrices = hasPermission('manage_billing')
 
-  function updateStatus(status: 'pending' | 'in_progress' | 'completed' | 'cancelled') {
+  function updateStatus(status: 'pending' | 'in_progress' | 'completed' | 'canceled') {
     if (!orderId) return
     updateOrder.mutate(
       { id: orderId, data: { status } },
@@ -169,7 +170,7 @@ export default function LabOrderDetail() {
   const isPending = order.status === 'pending'
   const isInProgress = order.status === 'in_progress'
   const isCompleted = order.status === 'completed'
-  const isCancelled = order.status === 'cancelled'
+  const isCancelled = order.status === 'canceled'
   const isTerminal = isCompleted || isCancelled
 
   return (
@@ -234,7 +235,7 @@ export default function LabOrderDetail() {
               <Button
                 size="sm"
                 variant="outline"
-                onClick={() => updateStatus('cancelled')}
+                onClick={() => updateStatus('canceled')}
                 disabled={updateOrder.isPending}
               >
                 Cancel
@@ -255,12 +256,14 @@ export default function LabOrderDetail() {
               <dt className="text-xs text-muted-foreground">Test</dt>
               <dd className="font-medium mt-0.5">{testLabel}</dd>
             </div>
-            <div>
-              <dt className="text-xs text-muted-foreground">Price</dt>
-              <dd className="tabular-nums mt-0.5">
-                {formatCurrency(order.price_at_order_time)}
-              </dd>
-            </div>
+            {canSeePrices && (
+              <div>
+                <dt className="text-xs text-muted-foreground">Price</dt>
+                <dd className="tabular-nums mt-0.5">
+                  {formatCurrency(order.price_at_order_time)}
+                </dd>
+              </div>
+            )}
             <div>
               <dt className="text-xs text-muted-foreground">Visit</dt>
               <dd className="mt-0.5">

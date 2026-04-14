@@ -9,6 +9,7 @@ import {
   listPayments,
   pay,
   payCash,
+  quickPayCash,
   removeLineItem,
   voidInvoice,
   type AddLineItemPayload,
@@ -162,6 +163,17 @@ export function useCashPayment() {
       queryClient.invalidateQueries({
         queryKey: queryKeys.invoices.detail(invoiceId),
       })
+    },
+  })
+}
+
+export function useQuickPayCash() {
+  const queryClient = useQueryClient()
+  return useMutation({
+    mutationFn: (visitId: string) => quickPayCash(visitId),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: queryKeys.invoices.all })
+      queryClient.invalidateQueries({ queryKey: queryKeys.labOrders.all })
     },
   })
 }

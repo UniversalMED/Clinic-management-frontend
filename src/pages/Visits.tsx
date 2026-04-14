@@ -125,6 +125,7 @@ function NewVisitDialog({
   const [patientSearch, setPatientSearch] = useState('')
   const [debouncedSearch, setDebouncedSearch] = useState('')
   const [selectedPatientId, setSelectedPatientId] = useState<string | null>(null)
+  const [selectedDoctorId, setSelectedDoctorId] = useState<string>('')
 
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   useEffect(() => {
@@ -140,10 +141,14 @@ function NewVisitDialog({
     page_size: 10,
   })
 
+  const { data: usersData } = useUsers({ role: 'doctor', page_size: 100 })
+  const doctors = usersData?.results ?? []
+
   function reset() {
     setPatientSearch('')
     setDebouncedSearch('')
     setSelectedPatientId(null)
+    setSelectedDoctorId('')
   }
 
   function handleOpenChange(next: boolean) {
@@ -154,7 +159,10 @@ function NewVisitDialog({
   function handleSubmit() {
     if (!selectedPatientId) return
     createVisit.mutate(
-      { patient_id: selectedPatientId },
+      {
+        patient_id: selectedPatientId,
+        assigned_doctor_id: selectedDoctorId || null,
+      },
       {
         onSuccess: (visit) => {
           toast.success('Visit created')
@@ -174,57 +182,76 @@ function NewVisitDialog({
         <DialogHeader>
           <DialogTitle>New visit</DialogTitle>
           <DialogDescription>
-            Search for a patient to start a new visit.
+            Search for a patient and optionally assign a doctor.
           </DialogDescription>
         </DialogHeader>
 
-        <div className="space-y-1.5">
-          <Label>Patient</Label>
-          <div className="relative">
-            <Search className="absolute left-2.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-muted-foreground" />
-            <Input
-              placeholder="Search by name or phone…"
-              value={patientSearch}
-              onChange={(e) => {
-                setPatientSearch(e.target.value)
-                if (selectedPatientId) {
-                  setSelectedPatientId(null)
-                }
-              }}
-              className="pl-8"
-            />
+        <div className="space-y-4">
+          <div className="space-y-1.5">
+            <Label>Patient *</Label>
+            <div className="relative">
+              <Search className="absolute left-2.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-muted-foreground" />
+              <Input
+                placeholder="Search by name or phone…"
+                value={patientSearch}
+                onChange={(e) => {
+                  setPatientSearch(e.target.value)
+                  if (selectedPatientId) {
+                    setSelectedPatientId(null)
+                  }
+                }}
+                className="pl-8"
+              />
+            </div>
+
+            {showResults && (
+              <div className="rounded-lg border border-border bg-popover shadow-sm max-h-48 overflow-y-auto">
+                {patientsLoading ? (
+                  <p className="px-3 py-2 text-sm text-muted-foreground">
+                    Searching…
+                  </p>
+                ) : patients?.results.length === 0 ? (
+                  <p className="px-3 py-2 text-sm text-muted-foreground">
+                    No patients found.
+                  </p>
+                ) : (
+                  patients?.results.map((p) => (
+                    <button
+                      key={p.id}
+                      type="button"
+                      className="w-full text-left px-3 py-2 text-sm hover:bg-muted"
+                      onClick={() => {
+                        setSelectedPatientId(p.id)
+                        setPatientSearch(p.full_name)
+                      }}
+                    >
+                      <span className="font-medium">{p.full_name}</span>
+                      <span className="ml-2 text-xs text-muted-foreground">
+                        {p.phone}
+                      </span>
+                    </button>
+                  ))
+                )}
+              </div>
+            )}
           </div>
 
-          {showResults && (
-            <div className="rounded-lg border border-border bg-popover shadow-sm max-h-48 overflow-y-auto">
-              {patientsLoading ? (
-                <p className="px-3 py-2 text-sm text-muted-foreground">
-                  Searching…
-                </p>
-              ) : patients?.results.length === 0 ? (
-                <p className="px-3 py-2 text-sm text-muted-foreground">
-                  No patients found.
-                </p>
-              ) : (
-                patients?.results.map((p) => (
-                  <button
-                    key={p.id}
-                    type="button"
-                    className="w-full text-left px-3 py-2 text-sm hover:bg-muted"
-                    onClick={() => {
-                      setSelectedPatientId(p.id)
-                      setPatientSearch(p.full_name)
-                    }}
-                  >
-                    <span className="font-medium">{p.full_name}</span>
-                    <span className="ml-2 text-xs text-muted-foreground">
-                      {p.phone}
-                    </span>
-                  </button>
-                ))
-              )}
-            </div>
-          )}
+          <div className="space-y-1.5">
+            <Label htmlFor="assign-doctor">Assign doctor (optional)</Label>
+            <select
+              id="assign-doctor"
+              value={selectedDoctorId}
+              onChange={(e) => setSelectedDoctorId(e.target.value)}
+              className="h-8 w-full rounded-lg border border-input bg-transparent px-2.5 text-sm outline-none transition-colors focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50 dark:bg-input/30"
+            >
+              <option value="">No doctor assigned</option>
+              {doctors.map((d) => (
+                <option key={d.id} value={d.id}>
+                  {d.full_name}
+                </option>
+              ))}
+            </select>
+          </div>
         </div>
 
         <DialogFooter showCloseButton>

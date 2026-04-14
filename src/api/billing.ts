@@ -87,6 +87,16 @@ export const payCash = (invoiceId: string) =>
     .post<Payment>(`/api/billing/invoices/${invoiceId}/pay-cash/`, {})
     .then((r) => r.data)
 
+export type QuickPayCashResponse = {
+  invoice: Invoice
+  payment: Payment
+}
+
+export const quickPayCash = (visitId: string) =>
+  client
+    .post<QuickPayCashResponse>('/api/billing/invoices/quick-pay-cash/', { visit_id: visitId })
+    .then((r) => r.data)
+
 export const listPayments = (
   invoiceId: string,
   params?: { page?: number; page_size?: number },

@@ -13,7 +13,7 @@ type AuthState = {
 
 export const useAuthStore = create<AuthState>((set) => ({
   user: null,
-  isLoading: false,
+  isLoading: true,   // true until first session check completes
   isAuthenticated: false,
   setUser: (profile) =>
     set({ user: profile, isAuthenticated: profile !== null }),

@@ -7,6 +7,10 @@ import {
   UserCog,
   ChevronDown,
   ChevronUp,
+  PlayCircle,
+  ClipboardList,
+  FlaskConical,
+  Receipt,
 } from 'lucide-react'
 import { toast } from 'sonner'
 
@@ -56,11 +60,11 @@ import { cn } from '@/lib/utils'
 
 type TabId = 'overview' | 'consultation' | 'lab' | 'billing'
 
-const TABS: { id: TabId; label: string }[] = [
-  { id: 'overview', label: 'Overview' },
-  { id: 'consultation', label: 'Consultation' },
-  { id: 'lab', label: 'Lab Orders' },
-  { id: 'billing', label: 'Billing' },
+const TABS: { id: TabId; label: string; icon: React.ElementType }[] = [
+  { id: 'overview', label: 'Overview', icon: ClipboardList },
+  { id: 'consultation', label: 'Consultation', icon: Stethoscope },
+  { id: 'lab', label: 'Lab Orders', icon: FlaskConical },
+  { id: 'billing', label: 'Billing', icon: Receipt },
 ]
 
 const PAGE_SIZE = 25
@@ -138,8 +142,8 @@ function AssignDoctorDialog({
 // Overview tab
 // ---------------------------------------------------------------------------
 
-function OverviewTab({ visit }: { visit: Visit }) {
-  const { hasPermission } = useAuth()
+function OverviewTab({ visit, onTabChange }: { visit: Visit; onTabChange: (tab: TabId) => void }) {
+  const { hasPermission, user } = useAuth()
   const { data: patient } = usePatient(visit.patient_id)
   const { data: usersData } = useUsers({ page_size: 100 })
   const userMap = new Map(
@@ -149,9 +153,9 @@ function OverviewTab({ visit }: { visit: Visit }) {
   const updateVisit = useUpdateVisit()
   const [assignOpen, setAssignOpen] = useState(false)
 
-  // Doctors can advance status; only receptionist/admin can reassign doctor
   const canAdvanceStatus = hasPermission('update_visit')
-  const canAssignDoctor = hasPermission('write_visit')
+  const canAssignDoctor = hasPermission('write_visit') || hasPermission('update_visit')
+  const isDoctor = user?.role === 'doctor'
 
   function handleAdvanceStatus() {
     const next =
@@ -165,7 +169,13 @@ function OverviewTab({ visit }: { visit: Visit }) {
     updateVisit.mutate(
       { id: visit.id, data: { status: next } },
       {
-        onSuccess: () => toast.success(label),
+        onSuccess: () => {
+          toast.success(label)
+          // After starting, guide doctor to consultation tab
+          if (next === 'in_progress' && isDoctor) {
+            onTabChange('consultation')
+          }
+        },
         onError: () => toast.error('Failed to update visit'),
       },
     )
@@ -178,6 +188,30 @@ function OverviewTab({ visit }: { visit: Visit }) {
 
   return (
     <>
+      {/* Doctor quick-start banner */}
+      {isDoctor && visit.status === 'open' && (
+        <div className="rounded-lg border border-blue-200 bg-blue-50 p-4 dark:border-blue-800 dark:bg-blue-950/30">
+          <div className="flex items-center justify-between gap-4">
+            <div>
+              <p className="text-sm font-medium text-blue-900 dark:text-blue-100">
+                Ready to examine?
+              </p>
+              <p className="text-xs text-blue-700 dark:text-blue-300 mt-0.5">
+                Start the visit to begin writing the consultation, lab orders, and prescription.
+              </p>
+            </div>
+            <Button
+              size="sm"
+              onClick={handleAdvanceStatus}
+              disabled={updateVisit.isPending}
+            >
+              <PlayCircle className="h-3.5 w-3.5" />
+              {updateVisit.isPending ? '…' : 'Start Examination'}
+            </Button>
+          </div>
+        </div>
+      )}
+
       <Card>
         <CardHeader className="border-b">
           <div className="flex items-center justify-between">
@@ -193,7 +227,7 @@ function OverviewTab({ visit }: { visit: Visit }) {
                   {visit.assigned_doctor_id ? 'Change doctor' : 'Assign doctor'}
                 </Button>
               )}
-              {canAdvanceStatus && (
+              {canAdvanceStatus && visit.status !== 'open' && (
                 <Button
                   size="sm"
                   variant={visit.status === 'completed' ? 'outline' : 'default'}
@@ -202,11 +236,9 @@ function OverviewTab({ visit }: { visit: Visit }) {
                 >
                   {updateVisit.isPending
                     ? '…'
-                    : visit.status === 'open'
-                      ? 'Start visit'
-                      : visit.status === 'in_progress'
-                        ? 'Complete visit'
-                        : 'Reopen visit'}
+                    : visit.status === 'in_progress'
+                      ? 'Complete visit'
+                      : 'Reopen visit'}
                 </Button>
               )}
             </div>
@@ -252,6 +284,36 @@ function OverviewTab({ visit }: { visit: Visit }) {
           </dl>
         </CardContent>
       </Card>
+
+      {/* Quick-access buttons for doctor */}
+      {isDoctor && visit.status === 'in_progress' && (
+        <div className="grid grid-cols-3 gap-3">
+          <button
+            type="button"
+            onClick={() => onTabChange('consultation')}
+            className="flex flex-col items-center gap-2 rounded-lg border border-border bg-card p-4 hover:bg-muted transition-colors"
+          >
+            <Stethoscope className="h-5 w-5 text-muted-foreground" />
+            <span className="text-xs font-medium">Write Consultation</span>
+          </button>
+          <button
+            type="button"
+            onClick={() => onTabChange('lab')}
+            className="flex flex-col items-center gap-2 rounded-lg border border-border bg-card p-4 hover:bg-muted transition-colors"
+          >
+            <FlaskConical className="h-5 w-5 text-muted-foreground" />
+            <span className="text-xs font-medium">Order Lab Test</span>
+          </button>
+          <button
+            type="button"
+            onClick={() => onTabChange('consultation')}
+            className="flex flex-col items-center gap-2 rounded-lg border border-border bg-card p-4 hover:bg-muted transition-colors"
+          >
+            <Receipt className="h-5 w-5 text-muted-foreground" />
+            <span className="text-xs font-medium">Write Prescription</span>
+          </button>
+        </div>
+      )}
 
       <AssignDoctorDialog
         visit={visit}
@@ -301,7 +363,7 @@ function ConsultationCard({
           {consultation.symptoms && (
             <div>
               <p className="text-xs font-medium text-muted-foreground uppercase tracking-wide">
-                Symptoms
+                Symptoms / Chief Complaint
               </p>
               <p className="mt-1 text-sm whitespace-pre-wrap">
                 {consultation.symptoms}
@@ -321,7 +383,7 @@ function ConsultationCard({
           {consultation.notes && (
             <div>
               <p className="text-xs font-medium text-muted-foreground uppercase tracking-wide">
-                Notes
+                Clinical Notes / Plan
               </p>
               <p className="mt-1 text-sm whitespace-pre-wrap">
                 {consultation.notes}
@@ -342,7 +404,7 @@ function ConsultationCard({
 }
 
 // ---------------------------------------------------------------------------
-// Add Consultation Form (inline, collapsible)
+// Add Consultation Form (inline, prominent)
 // ---------------------------------------------------------------------------
 
 function AddConsultationForm({
@@ -372,7 +434,7 @@ function AddConsultationForm({
       },
       {
         onSuccess: () => {
-          toast.success('Consultation note added')
+          toast.success('Consultation note saved')
           setSymptoms('')
           setDiagnosis('')
           setNotes('')
@@ -384,17 +446,21 @@ function AddConsultationForm({
   }
 
   return (
-    <form onSubmit={handleSubmit} className="space-y-3 rounded-lg border border-dashed border-border p-4">
-      <p className="text-xs font-medium text-muted-foreground uppercase tracking-wide">
-        New consultation note
-      </p>
+    <form onSubmit={handleSubmit} className="space-y-3 rounded-lg border border-blue-200 bg-blue-50/30 dark:border-blue-800 dark:bg-blue-950/10 p-4">
+      <div className="flex items-center gap-2">
+        <Stethoscope className="h-4 w-4 text-blue-600 dark:text-blue-400" />
+        <p className="text-sm font-semibold text-blue-900 dark:text-blue-100">
+          New consultation note
+        </p>
+      </div>
       <div className="space-y-1.5">
-        <Label htmlFor="symptoms">Symptoms</Label>
+        <Label htmlFor="symptoms">Symptoms / Chief Complaint</Label>
         <Textarea
           id="symptoms"
-          placeholder="Patient-reported symptoms…"
+          placeholder="Patient's chief complaint and symptoms…"
           value={symptoms}
           onChange={(e) => setSymptoms(e.target.value)}
+          rows={2}
         />
       </div>
       <div className="space-y-1.5">
@@ -404,15 +470,17 @@ function AddConsultationForm({
           placeholder="Clinical diagnosis…"
           value={diagnosis}
           onChange={(e) => setDiagnosis(e.target.value)}
+          rows={2}
         />
       </div>
       <div className="space-y-1.5">
-        <Label htmlFor="cons-notes">Notes</Label>
+        <Label htmlFor="cons-notes">Clinical Notes / Treatment Plan</Label>
         <Textarea
           id="cons-notes"
-          placeholder="Additional clinical notes, plan, follow-up…"
+          placeholder="Notes, treatment plan, follow-up instructions…"
           value={notes}
           onChange={(e) => setNotes(e.target.value)}
+          rows={2}
         />
       </div>
       <Button
@@ -420,7 +488,7 @@ function AddConsultationForm({
         size="sm"
         disabled={!hasContent || createConsultation.isPending}
       >
-        {createConsultation.isPending ? 'Saving…' : 'Save note'}
+        {createConsultation.isPending ? 'Saving…' : 'Save consultation note'}
       </Button>
     </form>
   )
@@ -668,30 +736,38 @@ function ConsultationTab({ visit }: { visit: Visit }) {
   }
 
   return (
-    <div className="space-y-3">
+    <div className="space-y-4">
+      {/* Form first for doctors — write at top, review below */}
+      {canWrite && (
+        <AddConsultationForm
+          visitId={visit.id}
+          onSuccess={() => {}}
+        />
+      )}
+
       {consultations.length === 0 && !canWrite && (
         <p className="text-sm text-muted-foreground">
           No consultation notes recorded for this visit.
         </p>
       )}
 
-      {consultations.map((c) => (
-        <div key={c.id} className="space-y-0">
-          <ConsultationCard
-            consultation={c}
-            doctorName={
-              userMap.get(c.doctor_id) ?? `…${c.doctor_id.slice(-6)}`
-            }
-          />
-          <ConsultationPrescriptions consultationId={c.id} canWrite={canWrite} />
+      {consultations.length > 0 && (
+        <div className="space-y-3">
+          <p className="text-xs font-medium text-muted-foreground uppercase tracking-wide">
+            Previous notes ({consultations.length})
+          </p>
+          {consultations.map((c) => (
+            <div key={c.id} className="space-y-0">
+              <ConsultationCard
+                consultation={c}
+                doctorName={
+                  userMap.get(c.doctor_id) ?? `…${c.doctor_id.slice(-6)}`
+                }
+              />
+              <ConsultationPrescriptions consultationId={c.id} canWrite={canWrite} />
+            </div>
+          ))}
         </div>
-      ))}
-
-      {canWrite && (
-        <AddConsultationForm
-          visitId={visit.id}
-          onSuccess={() => {}}
-        />
       )}
     </div>
   )
@@ -708,6 +784,8 @@ function OrderTestForm({
   visitId: string
   onSuccess: () => void
 }) {
+  const { hasPermission } = useAuth()
+  const canSeePrices = hasPermission('manage_billing')
   const createOrder = useCreateLabOrder()
   const { data: testsData } = useLabTests({ page_size: 100 })
   const tests = testsData?.results.filter((t) => t.is_active) ?? []
@@ -746,7 +824,7 @@ function OrderTestForm({
           <option value="">Select test…</option>
           {tests.map((t) => (
             <option key={t.id} value={t.id}>
-              {t.name} — {formatCurrency(t.price)}
+              {canSeePrices ? `${t.name} — ${formatCurrency(t.price)}` : t.name}
             </option>
           ))}
         </select>
@@ -769,6 +847,7 @@ function OrderTestForm({
 function LabTab({ visit }: { visit: Visit }) {
   const { hasPermission } = useAuth()
   const canOrder = hasPermission('order_lab_test')
+  const canSeePrices = hasPermission('manage_billing')
   const [page, setPage] = useState(1)
 
   const { data, isLoading } = useLabOrders({
@@ -796,15 +875,15 @@ function LabTab({ visit }: { visit: Visit }) {
         <StatusBadge domain="lab_order" status={row.original.status} />
       ),
     },
-    {
+    ...(canSeePrices ? [{
       id: 'price',
       header: 'Price',
-      cell: ({ row }) => (
+      cell: ({ row }: { row: { original: TestOrder } }) => (
         <span className="tabular-nums text-muted-foreground">
           {formatCurrency(row.original.price_at_order_time)}
         </span>
       ),
-    },
+    } as ColumnDef<TestOrder>] : []),
     {
       id: 'ordered',
       header: 'Ordered',
@@ -812,6 +891,18 @@ function LabTab({ visit }: { visit: Visit }) {
         <span className="text-muted-foreground">
           {formatRelative(row.original.created_at)}
         </span>
+      ),
+    },
+    {
+      id: 'actions',
+      header: '',
+      cell: ({ row }) => (
+        <Link
+          to={`/lab/orders/${row.original.id}`}
+          className="text-xs text-primary hover:underline"
+        >
+          {row.original.status === 'completed' ? 'View result →' : 'View →'}
+        </Link>
       ),
     },
   ]
@@ -908,8 +999,11 @@ function BillingTab({ visitId }: { visitId: string }) {
 export default function VisitDetail() {
   const { visitId } = useParams<{ visitId: string }>()
   const navigate = useNavigate()
+  const { user } = useAuth()
 
-  const [activeTab, setActiveTab] = useState<TabId>('overview')
+  // Doctors default to consultation tab for faster workflow
+  const defaultTab: TabId = user?.role === 'doctor' ? 'consultation' : 'overview'
+  const [activeTab, setActiveTab] = useState<TabId>(defaultTab)
 
   const { data: visit, isLoading } = useVisit(visitId)
   const { data: patient } = usePatient(visit?.patient_id)
@@ -974,26 +1068,30 @@ export default function VisitDetail() {
         role="tablist"
         aria-label="Visit sections"
       >
-        {TABS.map((tab) => (
-          <button
-            key={tab.id}
-            role="tab"
-            aria-selected={activeTab === tab.id}
-            onClick={() => setActiveTab(tab.id)}
-            className={cn(
-              '-mb-px border-b-2 px-4 pb-3 text-sm font-medium transition-colors',
-              activeTab === tab.id
-                ? 'border-foreground text-foreground'
-                : 'border-transparent text-muted-foreground hover:text-foreground',
-            )}
-          >
-            {tab.label}
-          </button>
-        ))}
+        {TABS.map((tab) => {
+          const Icon = tab.icon
+          return (
+            <button
+              key={tab.id}
+              role="tab"
+              aria-selected={activeTab === tab.id}
+              onClick={() => setActiveTab(tab.id)}
+              className={cn(
+                '-mb-px border-b-2 px-4 pb-3 text-sm font-medium transition-colors flex items-center gap-1.5',
+                activeTab === tab.id
+                  ? 'border-foreground text-foreground'
+                  : 'border-transparent text-muted-foreground hover:text-foreground',
+              )}
+            >
+              <Icon className="h-3.5 w-3.5" />
+              {tab.label}
+            </button>
+          )
+        })}
       </div>
 
       {/* Tab content */}
-      {activeTab === 'overview' && <OverviewTab visit={visit} />}
+      {activeTab === 'overview' && <OverviewTab visit={visit} onTabChange={setActiveTab} />}
       {activeTab === 'consultation' && <ConsultationTab visit={visit} />}
       {activeTab === 'lab' && <LabTab visit={visit} />}
       {activeTab === 'billing' && <BillingTab visitId={visit.id} />}

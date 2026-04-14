@@ -155,7 +155,11 @@ interface WalkInTabProps {
 
 function WalkInTab({ onSuccess }: WalkInTabProps) {
   const [selected, setSelected] = useState<Patient | null>(null)
+  const [queuePosition, setQueuePosition] = useState<number | null>(null)
   const checkIn = useCheckIn()
+  const { data: usersData } = useUsers({ role: 'doctor', page_size: 100 })
+  const doctors = usersData?.results.filter((u) => u.role === 'doctor') ?? []
+  const [selectedDoctorId, setSelectedDoctorId] = useState('')
 
   function handleSubmit(e: React.FormEvent) {
     e.preventDefault()
@@ -163,9 +167,15 @@ function WalkInTab({ onSuccess }: WalkInTabProps) {
     checkIn.mutate(
       { patient_id: selected.id },
       {
-        onSuccess: () => {
-          toast.success('Patient checked in')
+        onSuccess: (entry) => {
+          setQueuePosition(entry.queue_position)
+          toast.success(
+            entry.queue_position
+              ? `Patient checked in — Queue position #${entry.queue_position}`
+              : 'Patient checked in',
+          )
           setSelected(null)
+          setSelectedDoctorId('')
           onSuccess()
         },
         onError: () => toast.error('Check-in failed'),
@@ -175,13 +185,36 @@ function WalkInTab({ onSuccess }: WalkInTabProps) {
 
   return (
     <form onSubmit={handleSubmit} className="space-y-3">
-      <PatientSearch selected={selected} onSelect={setSelected} />
+      <PatientSearch selected={selected} onSelect={(p) => { setSelected(p); setQueuePosition(null) }} />
+
+      {selected && doctors.length > 0 && (
+        <div className="space-y-1">
+          <label className="text-xs text-muted-foreground">Preferred doctor (optional)</label>
+          <select
+            value={selectedDoctorId}
+            onChange={(e) => setSelectedDoctorId(e.target.value)}
+            className="h-8 w-full rounded-lg border border-input bg-transparent px-2.5 text-sm outline-none transition-colors focus-visible:border-ring dark:bg-input/30"
+          >
+            <option value="">Any available doctor</option>
+            {doctors.map((d) => (
+              <option key={d.id} value={d.id}>{d.full_name}</option>
+            ))}
+          </select>
+        </div>
+      )}
+
+      {queuePosition && (
+        <div className="rounded-lg bg-emerald-50 border border-emerald-200 px-3 py-2 text-xs text-emerald-800 dark:bg-emerald-950/30 dark:border-emerald-800 dark:text-emerald-200">
+          Queue position: <strong>#{queuePosition}</strong> — first-come, first-served
+        </div>
+      )}
+
       <Button
         type="submit"
         className="w-full"
         disabled={!selected || checkIn.isPending}
       >
-        {checkIn.isPending ? 'Checking in…' : 'Check in'}
+        {checkIn.isPending ? 'Checking in…' : 'Check in to queue'}
       </Button>
     </form>
   )

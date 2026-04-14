@@ -1,9 +1,8 @@
 import { useQueryClient } from '@tanstack/react-query'
-import { useCallback, useEffect } from 'react'
+import { useCallback } from 'react'
 
 import { signInWithPassword, signOut } from '@/api/auth'
 import { getMe } from '@/api/users'
-import { supabase } from '@/lib/supabase'
 import { useAuthStore } from '@/store/auth.store'
 import type { Permission, Profile, Role } from '@/types/user.types'
 import {
@@ -31,51 +30,6 @@ export function useAuth(): {
   const setUser = useAuthStore((s) => s.setUser)
   const clearUser = useAuthStore((s) => s.clearUser)
   const setLoading = useAuthStore((s) => s.setLoading)
-
-  useEffect(() => {
-    // Already hydrated — don't re-run on every component mount.
-    if (useAuthStore.getState().isAuthenticated) return
-
-    let cancelled = false
-
-    async function hydrate() {
-      setLoading(true)
-      try {
-        const {
-          data: { session },
-        } = await supabase.auth.getSession()
-
-        if (!session) {
-          if (!cancelled) {
-            clearUser()
-            setLoading(false)
-          }
-          return
-        }
-
-        const timeout = new Promise<never>((_, reject) =>
-          setTimeout(() => reject(new Error('Profile fetch timed out')), 10_000),
-        )
-        const profile = await Promise.race([getMe(), timeout])
-        if (!cancelled) {
-          setUser(profile)
-          queryClient.setQueryData(queryKeys.users.me(), profile)
-          setLoading(false)
-        }
-      } catch {
-        if (!cancelled) {
-          clearUser()
-          setLoading(false)
-        }
-      }
-    }
-
-    void hydrate()
-
-    return () => {
-      cancelled = true
-    }
-  }, [clearUser, queryClient, setLoading, setUser])
 
   const hasPermission = useCallback(
     (p: Permission) => {

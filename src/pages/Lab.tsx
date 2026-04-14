@@ -1,6 +1,6 @@
-import { useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { type ColumnDef } from '@tanstack/react-table'
-import { Plus } from 'lucide-react'
+import { Plus, Search } from 'lucide-react'
 import { toast } from 'sonner'
 
 import type { LabTest, TestOrder, TestOrderStatus } from '@/types/lab.types'
@@ -59,11 +59,12 @@ const PAGE_SIZE = 25
 type OrderStatus = '' | TestOrderStatus
 
 const ORDER_STATUS_FILTERS: { value: OrderStatus; label: string }[] = [
-  { value: '', label: 'All' },
   { value: 'pending', label: 'Pending' },
   { value: 'in_progress', label: 'In progress' },
+  { value: '', label: 'All' },
+  { value: 'awaiting_payment', label: 'Awaiting payment' },
   { value: 'completed', label: 'Completed' },
-  { value: 'cancelled', label: 'Cancelled' },
+  { value: 'canceled', label: 'Cancelled' },
 ]
 
 // ---------------------------------------------------------------------------
@@ -82,7 +83,7 @@ function buildOrderColumns(
   return [
     {
       id: 'patient',
-      header: 'Patient / Visit',
+      header: 'Visit',
       cell: ({ row }) => (
         <span className="font-mono text-xs text-muted-foreground">
           …{row.original.visit_id.slice(-6)}
@@ -169,13 +170,6 @@ function buildOrderColumns(
             )}
             {canProcess && order.status === 'in_progress' && (
               <>
-                <Button
-                  size="xs"
-                  variant="outline"
-                  onClick={() => onUpdateStatus(order.id, 'completed')}
-                >
-                  Complete
-                </Button>
                 {!isAssignedToSelf && (
                   <Button
                     size="xs"
@@ -187,12 +181,13 @@ function buildOrderColumns(
                 )}
               </>
             )}
-            {canWriteResult && order.status === 'completed' && (
+            {/* Allow result entry for in_progress AND completed orders */}
+            {canWriteResult && (order.status === 'in_progress' || order.status === 'completed') && (
               <Button
                 size="xs"
                 onClick={() => onEnterResult(order.id)}
               >
-                Enter result
+                {order.status === 'in_progress' ? 'Enter result & complete' : 'Enter result'}
               </Button>
             )}
           </div>
@@ -211,11 +206,22 @@ function OrdersTab() {
   const canProcess = hasPermission('process_lab_order')
   const canWriteResult = hasPermission('write_lab_result')
 
-  const [statusFilter, setStatusFilter] = useState<OrderStatus>('')
+  const [statusFilter, setStatusFilter] = useState<OrderStatus>('pending')
   const [patientId, setPatientId] = useState<string | null>(null)
+  const [testSearch, setTestSearch] = useState('')
+  const [debouncedTestSearch, setDebouncedTestSearch] = useState('')
   const [page, setPage] = useState(1)
   const [resultDrawerOpen, setResultDrawerOpen] = useState(false)
   const [selectedOrderId, setSelectedOrderId] = useState<string | null>(null)
+
+  const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+  useEffect(() => {
+    if (debounceRef.current) clearTimeout(debounceRef.current)
+    debounceRef.current = setTimeout(() => setDebouncedTestSearch(testSearch), 300)
+    return () => {
+      if (debounceRef.current) clearTimeout(debounceRef.current)
+    }
+  }, [testSearch])
 
   const { data, isLoading } = useLabOrders({
     status: statusFilter || undefined,
@@ -267,15 +273,39 @@ function OrdersTab() {
     openResultDrawer,
   )
 
-  const tableData = data ?? { count: 0, next: null, previous: null, results: [] }
+  // Client-side filter by test name search
+  const rawResults = data?.results ?? []
+  const filteredResults = debouncedTestSearch
+    ? rawResults.filter((o) =>
+        (o.test_name ?? '').toLowerCase().includes(debouncedTestSearch.toLowerCase())
+      )
+    : rawResults
+
+  const tableData = {
+    count: debouncedTestSearch ? filteredResults.length : (data?.count ?? 0),
+    next: data?.next ?? null,
+    previous: data?.previous ?? null,
+    results: filteredResults,
+  }
 
   return (
     <div className="space-y-4">
-      {/* Patient filter */}
-      <PatientPicker
-        onChange={(id) => { setPatientId(id); setPage(1) }}
-        className="max-w-xs"
-      />
+      {/* Filters row */}
+      <div className="flex flex-wrap items-end gap-3">
+        <PatientPicker
+          onChange={(id) => { setPatientId(id); setPage(1) }}
+          className="w-56"
+        />
+        <div className="relative flex-1 min-w-40">
+          <Search className="absolute left-2.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-muted-foreground" />
+          <Input
+            placeholder="Search by test name…"
+            value={testSearch}
+            onChange={(e) => setTestSearch(e.target.value)}
+            className="pl-8 h-8 text-sm"
+          />
+        </div>
+      </div>
 
       {/* Status filter pills */}
       <div className="flex flex-wrap gap-1.5">
@@ -326,7 +356,7 @@ function OrdersTab() {
           <DrawerHeader>
             <DrawerTitle>Enter result</DrawerTitle>
             <DrawerDescription>
-              Record the test findings for this order.
+              Record the test findings. The order will be marked complete on submit.
             </DrawerDescription>
           </DrawerHeader>
           <div className="flex-1 overflow-y-auto px-4 pb-4">
@@ -466,6 +496,7 @@ function AddTestDialog({
 
 function buildCatalogColumns(
   canManage: boolean,
+  canSeePrices: boolean,
   onToggleActive: (id: string, isActive: boolean) => void,
 ): ColumnDef<LabTest>[] {
   return [
@@ -485,15 +516,15 @@ function buildCatalogColumns(
         </span>
       ),
     },
-    {
+    ...(canSeePrices ? [{
       id: 'price',
       header: 'Price',
-      cell: ({ row }) => (
+      cell: ({ row }: { row: { original: LabTest } }) => (
         <span className="tabular-nums">
           {formatCurrency(row.original.price)}
         </span>
       ),
-    },
+    } as ColumnDef<LabTest>] : []),
     {
       id: 'status',
       header: 'Status',
@@ -542,6 +573,7 @@ function buildCatalogColumns(
 function CatalogTab() {
   const { hasPermission } = useAuth()
   const canManage = hasPermission('manage_lab_catalogue')
+  const canSeePrices = hasPermission('manage_billing')
 
   const [page, setPage] = useState(1)
   const [addDialogOpen, setAddDialogOpen] = useState(false)
@@ -560,7 +592,7 @@ function CatalogTab() {
     )
   }
 
-  const columns = buildCatalogColumns(canManage, handleToggleActive)
+  const columns = buildCatalogColumns(canManage, canSeePrices, handleToggleActive)
   const tableData = data ?? { count: 0, next: null, previous: null, results: [] }
 
   return (

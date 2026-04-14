@@ -4,9 +4,10 @@ import type { Permission, Role } from '@/types/user.types'
 // Role → Permission map
 //
 // Business rules enforced here (NOT scattered in components):
-//   • Billing (view_billing)      → super_admin, admin only
-//   • Create patients (write_patient) → receptionist only
-//   • Create lab orders (order_lab_test) → doctor only
+//   • Billing (view_billing, manage_billing) → admin, receptionist
+//   • void_invoice                           → admin only
+//   • Create patients (write_patient)        → admin, receptionist
+//   • Create lab orders (order_lab_test)     → doctor only
 //   • super_admin has every permission
 // ---------------------------------------------------------------------------
 
@@ -69,14 +70,16 @@ export const ROLE_PERMISSIONS: Record<Role, Permission[]> = {
   ],
 
   receptionist: [
-    // Patients — only receptionist can create patients
+    // Patients & visits — front-desk registration
     'write_patient',
     'write_visit',
     'update_visit',
+    // Billing — receptionists collect payments
+    'view_billing',
+    'manage_billing',
     // Queue & appointments — front-desk workflow
     'manage_appointments',
     'manage_queue',
-    // No billing, no lab ordering, no clinical access
   ],
 }
 
